@@ -1,0 +1,27 @@
+ID,Age,Sex,Year,Location,Time_to_tPA
+1,9,Female,(2017),TIPS Site,3.8
+2,8,Female,(2014),Other Hospital,4.08
+3,11,Male,(2015),TIPS Site,2.68
+4,14,Male,(2017),Other Hospital,3.18
+5,15,Male,(2017),Other Hospital,3
+6,10,Female,(2009),Other Hospital,2.45
+7,17,Female,(2010),Other Hospital,3
+8,14,Male,(2016),TIPS Site,3.33
+9,15,Female,(2018),TIPS Site,3.5
+10,17,Female,(2014),Other Hospital,3
+11,1.1,Male,(2014),TIPS Site,3.52
+12,3,Female,(2010),TIPS Site,3
+13,3.5,Male,(2016),TIPS Site,3
+14,4,Female,(2015),TIPS Site,2
+15,15,Female,(2016),Other Hospital,2
+16,16,Male,(2015),TIPS Site,3.37
+17,17,Male,(2014),TIPS Site,4.45
+18,13,Male,(2007),TIPS Site,2.5
+19,16,Male,(2010),Other Hospital,4.5
+20,6,Male,(2016),Other Hospital,3.5
+21,9,Female,(2016),TIPS Site,2.53
+22,14,Female,(2018),Other Hospital,3.25
+23,15,Male,(2018),Other Hospital,2.3
+24,17,Female,(2015),Other Hospital,2
+25,15,Male,(2016),Other Hospital,3.37
+26,16,Female,(2016),Other Hospital,2.12
