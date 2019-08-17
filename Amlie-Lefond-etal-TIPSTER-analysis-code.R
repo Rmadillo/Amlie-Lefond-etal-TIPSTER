@@ -5,7 +5,7 @@
 # Plasminogen Activator for Acute Stroke is Not Increased in Children
 # 
 # Code by: Andy Cooper, Dwight Barry
-# Date: 4 July 2019
+# Date: 16 August 2019
 # Version: 1.0
 #
 # URL: https://github.com/Rmadillo/Amlie-Lefondetal-TIPSTERS
@@ -48,52 +48,70 @@ library(forcats)
 ############################################################################## #
 
 
-#### Set up Bayes model ####
+#### Set up Bayesian model data ####
 
-## Bayesian Poisson model for probability of risk of SICH after tPA
+
+## Bayesian beta-binomial model for probability of risk of SICH after tPA
+
 
 # SICH incidents
+
 obs = 0
 
+
 # Number of tPA patients in TIPS
+
 npats = 26
 
 
 # Set up x axis points for posterior plot
-myx = seq(0, 1, 0.005)
+
+x = seq(0, 1, 0.005)
 
 
-# Primary prior assumption: same as adult risk, 6.4% (mode)
-alpha1 = 1.5
-beta1 = (alpha1 - 1 - 0.064 * alpha1 + 2 * 0.064) / 0.064
-mydata1 = data.frame(myx, myy = pbeta(myx, alpha1 + obs, beta1 + npats - obs)) %>% 
-          mutate(prior = "6.4% (Adult) Risk Prior")
+# Primary prior assumption: same as young adult (18-40) risk, 6.4% (mode)
+#   Dodds, J. A., Y. Xian, S. Sheng, G. C. Fonarow, D. L. Bhatt, R. Matsouaka, 
+#       L. H. Schwamm, E. D. Peterson and E. E. Smith (2019). "Thrombolysis in  
+#       young adults with stroke: Findings from Get With The Guidelines-Stroke." 
+#       Neurology 92(24): e2784-e2792.
+
+alpha_17 = 1.5
+beta_17 = (alpha_17 - 1 - 0.017 * alpha_17 + 2 * 0.017) / 0.017
+df_17 = data.frame(x, y = pbeta(x, alpha_17 + obs, beta_17 + npats - obs)) %>% 
+          mutate(prior = "1.7% Risk Prior")
 
 
-# No prior idea of what's going on, uniform prior
+# No apriori assumption of risk, uniform prior
+
 alpha_unif = 1
 beta_unif = 1
-mydata2 = data.frame(myx, myy = pbeta(myx, alpha_unif + obs, beta_unif + npats - obs)) %>% 
-          mutate(prior = "Uniform Prior")
+df_unif = data.frame(x, y = pbeta(x, alpha_unif + obs, beta_unif + npats - obs)) %>% 
+        mutate(prior = "Uniform Prior")
 
 
-# Conservative prior assumption: risk is worse in children (10% mode)
-alpha2 = 1.5
-beta2 = (alpha2 - 1 - 0.1 * alpha2 + 2 * 0.1) / 0.1
-mydata3 = data.frame(myx, myy = pbeta(myx, alpha2 + obs, beta2 + npats - obs)) %>% 
-          mutate(prior = "10% Risk Prior")
+# Conservative prior assumption: risk is similar to old adult estimate (6.4% mode)
+#   National Institute of Neurological Disorders and Stroke rt-PA Stroke Study
+#       Group (1995). Tissue plasminogen activator for acute ischemic stroke. 
+#       New England Journal of Medicine, 333(24), 1581-1588.
+
+alpha_64 = 1.5
+beta_64 = (alpha_64 - 1 - 0.064 * alpha_64 + 2 * 0.064) / 0.064
+df_64 = data.frame(x, y = pbeta(x, alpha_64 + obs, beta_64 + npats - obs)) %>%
+        mutate(prior = "6.4% Risk Prior")
 
 
 # Put all three together for plotting, order by assumption
-mydata = bind_rows(mydata1, mydata2, mydata3) %>%
-    mutate(prior = factor(prior, levels = c(
-        "Uniform Prior", "6.4% (Adult) Risk Prior", "10% Risk Prior")))
+
+df_figure1 = bind_rows(df_17, df_unif, df_64) %>%
+    mutate(prior = factor(prior, levels = c("1.7% Risk Prior",
+        "Uniform Prior", "6.4% Risk Prior")))
 
 
 
 #### Data for Figures ####
 
 # Data to build Figure 2
+
 figure2_data = read_csv("Amlie-Lefond-etal-TIPSTER-Figure2-data.csv") %>%
     mutate(NIHSS_decrease = NIHSS_624 - NIHSS_initial)
 
@@ -113,18 +131,50 @@ table2 = read_csv("Amlie-Lefond-etal-TIPSTER-Table2.csv")
 ############################################################################## #
 
 
-#### Figure 1: Posterior cdf plot and median risk values ####
+#### Risk values and Figure 1: Posterior cdf plot ####
+
+## Risk values
+
+# Posterior medians
+
+qbeta(0.5, alpha_17 + obs, beta_17 + npats - obs)       # 1.7% risk prior
+qbeta(0.5, alpha_unif + obs, beta_unif + npats - obs)   # uniform prior
+qbeta(0.5, alpha_64 + obs, beta_64 + npats - obs)       # 6.4% risk prior
 
 
-# Figure 1 
-ggplot(mydata, aes(x = myx, y = myy, color = prior)) +
+# Posterior modes
+
+(alpha_17 + obs - 1)/(alpha_17 + obs + beta_17 + npats - obs - 2)         # 1.7% risk prior
+(alpha_unif + obs - 1)/(alpha_unif + obs + beta_unif + npats - obs - 2)   # uniform prior
+(alpha_64 + obs - 1)/(alpha_64 + obs + beta_64 + npats - obs - 2)         # 6.4% risk prior
+
+
+# HDPIs from grid approximation for 1.7% risk prior
+
+df_grid_17 = tibble(p_grid = seq(from = 0, to = 1, length.out = 10001),
+                    prior = dbeta(p_grid, alpha_17, beta_17),
+                    likelihood = dbinom(obs, size = npats, prob = p_grid), 
+                    posterior = (likelihood * prior) / sum(likelihood * prior))
+
+
+samples = df_grid_17 %>% 
+    sample_n(size = 1e4, weight = posterior, replace = TRUE)
+
+
+rethinking::HPDI(samples$p_grid, 0.95)
+
+
+
+## Figure 1 
+
+ggplot(df_figure1, aes(x = x, y = y, color = prior)) +
     
     geom_path(aes(linetype = prior)) +
-    scale_linetype_manual(values=c("longdash", "solid", "dotdash")) +
+    scale_linetype_manual(values=c("solid", "longdash", "dotdash")) +
     
-    geom_point(data = mydata1, show.legend = F) +
+    geom_point(data = df_17, show.legend = F) +
     
-    scale_color_manual(values = c("gray30", "black", "gray60")) +
+    scale_color_manual(values = c("black", "gray30", "gray60")) +
     
     scale_x_continuous(
         name = "Percent Risk of SICH", 
@@ -136,39 +186,25 @@ ggplot(mydata, aes(x = myx, y = myy, color = prior)) +
         name = expression(paste("Probability that risk of SICH is below ", 
                italic("x"))),
             labels = scales::percent, limits = c(0, 1),
-            breaks = seq(0, 1, 0.2), expand = c(0.001, 0.001)) +
+            breaks = c(0, 0.25, 0.5, 0.75, 1), expand = c(0.001, 0.001)) +
     
     labs(subtitle = paste0("Total IV tPA Patients = ", npats, ", Observed SICH = ", obs), 
          color = "Prior Assumption: ", 
          linetype = "Prior Assumption: ") +
 
     theme_bw() +
-    theme(legend.position = 'bottom')
+    theme(legend.position = "bottom")
       
 
-# Smaller file size
-ggsave("TIPSTER_Figure_1_Bayes_Pois_Reg.png", width = 6.8, height = 4, units = "in", dpi = 320)
-
-
-# For publication
-# ggsave("TIPSTERS_Figure_1.tiff", width = 6.8, height = 4, units = "in", dpi = 320)
-
-
-# Median risk
-qbeta(0.5, alpha1 + obs, beta1 + npats - obs)
-qbeta(0.5, alpha_unif + obs, beta_unif + npats - obs)
-qbeta(0.5, alpha2 + obs, beta2 + npats - obs)
-
-
-# Timing for tPA
-psych::describe(table1$Time_to_tPA, quant = c(0.25, 0.5, 0.75))
+# Save to local directory
+ggsave("TIPSTER_Figure_1_Bayesian_Regression.png", width = 6.8, height = 4, units = "in", dpi = 320)
 
 
 
-#### Figure 2: Outcomes ####
+#### NIHSS/PSOM results and Figure 2: Outcomes ####
 
 
-# Figure 2A
+## NIHSS and PSOM results
 
 NIHSS = figure2_data %>%
     select(RecordID, NIHSS_initial, NIHSS_624) %>%
@@ -183,9 +219,37 @@ NIHSS_counts = NIHSS %>%
     group_by(SCORE) %>%
     summarise(COUNT = n(),
               MED = round(median(VALUE, na.rm = T), 0),
-              PCT = round(COUNT/26, 2),
+              PCT = round(COUNT/npats, 2),
               LABEL = paste0("n = ", COUNT))
 
+
+# Medians, n, pct
+NIHSS_counts
+
+
+# Compare the two groups, regardless of pre-post combination
+psych::describeBy(NIHSS$VALUE, NIHSS$SCORE, quant = c(0.25, 0.5, 0.75), 
+                  digits = 0, mat = T)
+
+
+# Those that have both pre- and post NIHSS scores
+NIHSS_both = filter(figure2_data, !is.na(NIHSS_initial) & !is.na(NIHSS_624))
+psych::describe(NIHSS_both$NIHSS_624, quant = c(0.25, 0.5, 0.75))
+
+
+# Look at pattern of decreases
+NIHSS_decreases = filter(figure2_data, NIHSS_decrease < 0)
+median(NIHSS_decreases$NIHSS_decrease, na.rm = T)
+
+
+# PSOM
+PSOM_counts
+
+
+
+## Figure 2 
+
+# Figure 2A
 
 NIHSS_plot = ggplot(NIHSS, aes(SCORE, VALUE)) + 
     geom_line(aes(group = RecordID),  alpha = 0.5) + 
@@ -202,7 +266,6 @@ NIHSS_plot = ggplot(NIHSS, aes(SCORE, VALUE)) +
     annotate(geom = "text", x = 1:2, y = 42.5, 
              label = paste0(NIHSS_counts$LABEL),
              size = 2.5, fontface = 3, hjust = 0.5, vjust = 0.5) 
-
 
 
 # Figure 2B
@@ -252,156 +315,160 @@ ggsave("TIPSTER_Figure_2_NIHSS_PSOM.png", width = 6.8, height = 4, units = "in",
 
 
 
-# NIHSS
-NIHSS_counts
-
-
-# Compare the two groups, regardless of pre-post combination
-psych::describeBy(NIHSS$VALUE, NIHSS$SCORE, quant = c(0.25, 0.5, 0.75), 
-                  digits = 0, mat = T)
-
-
-# Those that have both pre- and post NIHSS scores
-NIHSS_both = filter(figure2_data, !is.na(NIHSS_initial) & !is.na(NIHSS_624))
-psych::describe(NIHSS_both$NIHSS_624, quant = c(0.25, 0.5, 0.75))
-
-
-# Look at pattern of decreases
-NIHSS_decreases = filter(figure2_data, NIHSS_decrease < 0)
-median(NIHSS_decreases$NIHSS_decrease, na.rm = T)
-
-
-# PSOM
-PSOM_counts
-
-
-
-
-
-
 #### Suppl Figure 1: distributions of priors, likelihood, and posteriors #### 
 
 
-# PRIORS
+# Prior distributions
 
-myprior1 = data.frame(myx, myy = dbeta(myx, alpha1, beta1)) %>% 
-    mutate(prior = "6.4% (Adult) Risk Prior")
+df_prior_17 = tibble(x, y = dbeta(x, alpha_17, beta_17)) %>% 
+    mutate(prior = "1.7% Risk Prior")
 
-myprior2 = data.frame(myx, myy = dbeta(myx, alpha_unif, beta_unif)) %>% 
+df_prior_unif = tibble(x, y = dbeta(x, alpha_unif, beta_unif)) %>% 
     mutate(prior = "Uniform Prior")
 
-myprior3 = data.frame(myx, myy = dbeta(myx, alpha2, beta2)) %>% 
-    mutate(prior = "10% Risk Prior")
+df_prior_64 = tibble(x, y = dbeta(x, alpha_64, beta_64)) %>% 
+    mutate(prior = "6.4% Risk Prior")
 
-myprior = bind_rows(myprior1, myprior2, myprior3) %>%
-    mutate(prior = factor(prior, levels = c("Uniform Prior", 
-                                            "6.4% (Adult) Risk Prior", 
-                                            "10% Risk Prior")))
-
+df_priors = bind_rows(df_prior_17, df_prior_unif, df_prior_64) %>%
+    mutate(prior = factor(prior, levels = c("1.7% Risk Prior",
+                                            "Uniform Prior", 
+                                            "6.4% Risk Prior")))
 
 
 # Likelihood function
 
-likelihood = data.frame(myx = myx, mydensity = dbinom(x = obs, size = npats, 
-                                    prob = myx, log = FALSE))
+likelihood = tibble(x = x, like_density = dbinom(x = obs, size = npats, 
+                                    prob = x, log = FALSE))
+
+likelihood_groups = tibble(group = rep(c(" 0 SICH in 26 patients", 
+                                            " 0 SICH in 26 patients ", 
+                                            "0 SICH in 26 patients "), each = 201),
+                         x = rep(likelihood$x, 3),
+                         like_density = rep(likelihood$like_density, 3))
 
 
+# Posterior distributions
 
+df_post_17 = data.frame(x, y = dbeta(x, alpha_17 + obs, beta_17 + npats - obs)) %>% 
+    mutate(prior = "1.7% Risk Prior")
 
-# POSTERIORS
-
-mypost1 = data.frame(myx, myy = dbeta(myx, alpha1 + obs, beta1 + npats - obs)) %>% 
-    mutate(prior = "6.4% (Adult) Risk Prior")
-
-mypost2 = data.frame(myx, myy = dbeta(myx, alpha_unif + obs, beta_unif + npats - obs)) %>% 
+df_post_unif = data.frame(x, y = dbeta(x, alpha_unif + obs, beta_unif + npats - obs)) %>% 
     mutate(prior = "Uniform Prior")
 
-mypost3 = data.frame(myx, myy = dbeta(myx, alpha2 + obs, beta2 + npats - obs)) %>% 
-    mutate(prior = "10% Risk Prior")
+df_post_64 = data.frame(x, y = dbeta(x, alpha_64 + obs, beta_64 + npats - obs)) %>% 
+    mutate(prior = "6.4% Risk Prior")
 
-mypost = bind_rows(mypost1, mypost2, mypost3) %>%
-    mutate(prior = factor(prior, levels = c("Uniform Prior", 
-                                            "6.4% (Adult) Risk Prior", 
-                                            "10% Risk Prior")))
-
-
+df_posts = bind_rows(df_post_17, df_post_unif, df_post_64) %>%
+    mutate(prior = factor(prior, levels = c("1.7% Risk Prior",
+                                            "Uniform Prior", 
+                                            "6.4% Risk Prior")))
 
 
-priors_plot = ggplot(myprior, aes(x = myx, y = myy, color = prior)) +
+## Figure SM.I
+
+priors_plot = ggplot(df_priors, aes(x = x, y = y, color = prior)) +
   
     geom_path(size = 1, aes(linetype = prior)) +
     
-    scale_linetype_manual(values=c("longdash", "solid", "dotdash")) +
-    scale_color_manual(values = c("#BCAF6FFF", "black", "#61646FFF")) +
+    scale_linetype_manual(values=c("solid", "longdash", "dotdash")) +
+    scale_color_manual(values = c("black", "#BCAF6FFF", "#61646FFF")) +
+    
     scale_x_continuous(name = "Probability of SICH", expand = c(0.001, 0.0025)) +
-    scale_y_continuous(name = "Probability Density", labels = NULL, 
+    scale_y_continuous(name = "", labels = NULL, 
                      breaks = NULL, expand = c(0.01, 0.01)) +
+    
     expand_limits(x = 1.005) +
     
-    labs(subtitle = "Prior Probability Distributions",
-       color = "Prior Assumption: ", linetype = "Prior Assumption: ") +
+    labs(title = "Prior Probability", color = "Prior Assumption: ", 
+         linetype = "Prior Assumption: ") +
     
-    theme_bw() + 
+    facet_wrap(~prior, ncol = 1, scales = "free") +
+    
+    theme_bw(base_size = 10) + 
     theme(legend.position = "bottom",
-          plot.subtitle = element_text(hjust = 0.5))
+          plot.title = element_text(hjust = 0.5))
 
 
-like_plot = ggplot(likelihood, aes(myx, mydensity)) + 
+like_plot = ggplot(likelihood_groups, aes(x, like_density)) + 
+    
     geom_line(size = 1) +
-    scale_x_continuous(name = "Probability of SICH", expand = c(0.001, 0.0025)) +
-    scale_y_continuous(labels = NULL, 
-                     breaks = NULL, expand = c(0.01, 0.01)) +
+    
+    scale_x_continuous(expand = c(0.001, 0.0025)) +
+    scale_y_continuous(labels = NULL, breaks = NULL, expand = c(0.01, 0.01)) +
+    
     expand_limits(x = 1.005) +
-    labs(x = "Proportion of SICH", y = "Likelihood",
-         subtitle = "Likelihood Function") +
-    theme_bw() + 
+    
+    labs(x = "Likelihood", y = "", title = "Likelihood Function") +
+    
+    facet_wrap(~group, ncol = 1, scales = "free") +
+    
+    theme_bw(base_size = 10) + 
     theme(legend.position = "none",
-          plot.subtitle = element_text(hjust = 0.5))
+          plot.title = element_text(hjust = 0.5),
+          strip.text = element_text(hjust = 0.5))
 
 
-post_plot = ggplot(mypost, aes(x = myx, y = myy, color = prior)) +
+post_plot = ggplot(df_posts, aes(x = x, y = y, color = prior)) +
     
     geom_path(size = 1, aes(linetype = prior)) +
     
-    scale_linetype_manual(values=c("longdash", "solid", "dotdash")) +
-    scale_color_manual(values = c("#BCAF6FFF", "black", "#61646FFF")) +
+    scale_linetype_manual(values=c("solid", "longdash", "dotdash")) +
+    scale_color_manual(values = c("black", "#BCAF6FFF", "#61646FFF")) +
+    
     scale_x_continuous(name = "Probability of SICH", expand = c(0.001, 0.0025)) +
-    scale_y_continuous(name = "Probability Density", labels = NULL, 
-                     breaks = NULL, expand = c(0.01, 0.01)) +
+    scale_y_continuous(name = "", labels = NULL, breaks = NULL, expand = c(0.01, 0.01)) +
+    
     expand_limits(x=1.005) +
   
-    labs(subtitle = "Posterior Probability Distributions",
-       color = "Prior Assumption: ") +
+    labs(title = "Posterior Probability", color = "Prior Assumption: ") +
     
-    theme_bw() + 
+    facet_wrap(~prior, ncol = 1, scales = "free") +
+    
+    theme_bw(base_size = 10) + 
     theme(legend.position = "none",
-          plot.subtitle = element_text(hjust = 0.5))
+          plot.title = element_text(hjust = 0.5))
 
 
-# Legend
+# Legend and spacers
+
 priors_plot_nolege = priors_plot + theme(legend.position = "none")
 
-priors_plot_leggie = ggplot(myprior, aes(x = myx, y = myy, color = prior)) +
+
+priors_plot_leggie = ggplot(df_priors, aes(x = x, y = y, color = prior)) +
     geom_path(size = 1) +
-    scale_color_manual(values = c("#BCAF6FFF", "black", "#61646FFF")) +
-    scale_linetype_manual(values=c("longdash", "solid", "dotdash")) +
+    scale_color_manual(values = c("black", "#BCAF6FFF", "#61646FFF")) +
+    scale_linetype_manual(values=c("solid", "longdash", "dotdash")) +
     theme_bw(base_size = 10) + 
     labs( color = "Prior Assumption: ", linetype = "Prior Assumption: ") +
     theme(legend.position = "bottom")
 
+
 leggie = cowplot::get_legend(priors_plot_leggie) 
 
 
-# Plot Supplemental Figure 1
-cowplot::plot_grid(leggie, priors_plot_nolege, like_plot, post_plot, labels = c("", "A", "B", "C"), nrow = 4, rel_heights = c(0.2, 2, 2, 2))
+times = ggplot() + 
+    labs(title = " * ") + 
+    theme_void() + 
+    theme(plot.title = element_text(hjust = 1, size = 14, face = "bold"))
 
 
-ggsave("TIPSTER_Supplemental_Figure_i.png", width = 6.5, height = 7, dpi = 320)
+proportional = ggplot() + 
+    labs(title = expression(" " %prop% " ")) + 
+    theme_void() + 
+    theme(plot.title = element_text(hjust = 1, size = 14, face = "bold"))
+
+
+# Plot Supplemental Figure I
+
+cowplot::plot_grid(priors_plot_nolege, times, like_plot, proportional, post_plot, 
+                   nrow = 1, scale = 0.95, rel_widths = c(2, 0.3, 2, 0.3, 2),
+                   hjust = c(-1, -1, -1))
+
+
+ggsave("TIPSTER_Supplemental_Figure_I.png", width = 6.5, height = 5, dpi = 320)
 
 
 
-
-       
 #### Suppl Figure 2: No patterns in demographics, etc. ####
 
 
@@ -409,11 +476,14 @@ ggplot(table1, aes(Age, Time_to_tPA,
                    fill = Sex, 
                    size = forcats::fct_rev(Location),
                    shape = forcats::fct_rev(Location))) +
+    
     geom_point(alpha = 0.5, color = "black") +
     geom_point(data = filter(table1, Sex == "Female"), alpha = 0.5, color = "black") +
+    
     scale_y_continuous(limits = c(0, 5), expand = c(0.01, 0)) +
     scale_x_continuous(limits = c(0, 20), minor_breaks = seq(1:19), 
                        expand = c(0.01, 0)) +
+    
     scale_fill_viridis_d() +
     coord_flip() +
     scale_size_discrete(range = c(4, 2)) +
@@ -421,6 +491,7 @@ ggplot(table1, aes(Age, Time_to_tPA,
     labs(x = "Patient Age (years)", y = "Time to tPA (hours)", 
          fill = "Sex", size = "Location",
          shape = "Location") +
+    
     theme_minimal() +
     guides(fill = guide_legend(nrow = 2, byrow = F, 
         override.aes = list(shape = 22, size = 6, alpha = 0.8)), 
@@ -428,9 +499,7 @@ ggplot(table1, aes(Age, Time_to_tPA,
         size = guide_legend(nrow = 2, byrow = T)) 
 
 
-ggsave("TIPSTER_Supplemental_Figure_ii.png", dpi = 320, width = 6.5, height = 4, units = "in")
-
-
+ggsave("TIPSTER_Supplemental_Figure_II.png", dpi = 320, width = 6.5, height = 4, units = "in")
 
 
 
@@ -438,6 +507,7 @@ ggsave("TIPSTER_Supplemental_Figure_ii.png", dpi = 320, width = 6.5, height = 4,
 
 
 table1a = select(table1, ID, Age, Sex, Location)
+
 table2a = inner_join(table2, table1a) 
 
 
@@ -445,18 +515,22 @@ ggplot(table2a, aes(Time, ASPECTS_score,
                    fill = Sex, 
                    size = Age, 
                    shape = forcats::fct_rev(Location))) +
+    
     geom_point(alpha = 0.5) +
     geom_point(data = filter(table2a, Sex == "Female"), alpha = 0.25, 
                color = "black") +
+    
     scale_y_continuous(limits = c(1, 10.5), breaks = seq(1:10), minor_breaks = NULL, 
                        expand = c(0.01, 0)) +
     scale_x_continuous(limits = c(0, 200), breaks = c(0, 60, 120, 180), 
                        expand = c(0.01, 0)) +
+    
     scale_fill_viridis_d() +
     scale_shape_manual(values = c(21, 23)) +
     scale_size(range = c(0, 4)) +
     labs(y = "ASPECTS Score", x = "Time to CT (minutes)", fill = "Sex", size = "Age",
          shape = "Location") +
+    
     theme_minimal() +
     guides(fill = guide_legend(nrow = 2, byrow = F, 
            override.aes = list(shape = 22, size = 6, alpha = 0.8)), 
@@ -464,7 +538,7 @@ ggplot(table2a, aes(Time, ASPECTS_score,
            size = guide_legend(nrow = 2, byrow = T)) 
 
 
-ggsave("TIPSTER_Supplemental_Figure_iii.png", dpi = 320, width = 6.5, height = 4, units = "in")
+ggsave("TIPSTER_Supplemental_Figure_III.png", dpi = 320, width = 6.5, height = 4, units = "in")
 
 
 
