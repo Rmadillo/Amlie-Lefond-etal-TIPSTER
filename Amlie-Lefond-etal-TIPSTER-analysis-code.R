@@ -69,7 +69,7 @@ npats = 26
 x = seq(0, 1, 0.005)
 
 
-# Primary prior assumption: same as young adult (18-40) risk, 6.4% (mode)
+# Primary prior assumption: same as young adult (18-40) risk, 1.7% (mode)
 #   Dodds, J. A., Y. Xian, S. Sheng, G. C. Fonarow, D. L. Bhatt, R. Matsouaka, 
 #       L. H. Schwamm, E. D. Peterson and E. E. Smith (2019). "Thrombolysis in  
 #       young adults with stroke: Findings from Get With The Guidelines-Stroke." 
@@ -89,7 +89,7 @@ df_unif = data.frame(x, y = pbeta(x, alpha_unif + obs, beta_unif + npats - obs))
         mutate(prior = "Uniform Prior")
 
 
-# Conservative prior assumption: risk is similar to old adult estimate (6.4% mode)
+# Conservative prior assumption: risk is similar to old adult estimate, 6.4% (mode)
 #   National Institute of Neurological Disorders and Stroke rt-PA Stroke Study
 #       Group (1995). Tissue plasminogen activator for acute ischemic stroke. 
 #       New England Journal of Medicine, 333(24), 1581-1588.
