@@ -223,7 +223,7 @@ NIHSS_counts = NIHSS %>%
               LABEL = paste0("n = ", COUNT))
 
 
-# Medians, n, pct
+# NIHSS Medians, n, pct
 NIHSS_counts
 
 
@@ -241,9 +241,6 @@ psych::describe(NIHSS_both$NIHSS_624, quant = c(0.25, 0.5, 0.75))
 NIHSS_decreases = filter(figure2_data, NIHSS_decrease < 0)
 median(NIHSS_decreases$NIHSS_decrease, na.rm = T)
 
-
-# PSOM
-PSOM_counts
 
 
 
@@ -286,6 +283,10 @@ PSOM_counts = PSOM %>%
               MED = round(median(VALUE, na.rm = T), 0),
               PCT = round(COUNT/26, 2),
               LABEL = paste0("n = ", COUNT))
+
+
+# PSOM medians, n, pct
+PSOM_counts
 
 
 PSOM_plot = ggplot(PSOM, aes(SCORE, VALUE, group = RecordID)) + 
